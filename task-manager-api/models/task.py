@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
+
 from database import db
-from datetime import datetime
-import json
+from utils.helpers import VALID_STATUSES
+
 
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -12,8 +14,12 @@ class Task(db.Model):
     priority = db.Column(db.Integer, default=3)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     due_date = db.Column(db.DateTime, nullable=True)
     tags = db.Column(db.String(500), nullable=True)
 
@@ -21,40 +27,59 @@ class Task(db.Model):
     category = db.relationship('Category', backref='tasks')
 
     def to_dict(self):
-        data = {}
-        data['id'] = self.id
-        data['title'] = self.title
-        data['description'] = self.description
-        data['status'] = self.status
-        data['priority'] = self.priority
-        data['user_id'] = self.user_id
-        data['category_id'] = self.category_id
-        data['created_at'] = str(self.created_at)
-        data['updated_at'] = str(self.updated_at)
-        data['due_date'] = str(self.due_date) if self.due_date else None
-        data['tags'] = self.tags.split(',') if self.tags else []
-        return data
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'status': self.status,
+            'priority': self.priority,
+            'user_id': self.user_id,
+            'category_id': self.category_id,
+            'created_at': str(self.created_at),
+            'updated_at': str(self.updated_at),
+            'due_date': str(self.due_date) if self.due_date else None,
+            'tags': self.tags.split(',') if self.tags else [],
+            'overdue': self.is_overdue,
+        }
 
-    def validate_status(self, new_status):
-        valid = ['pending', 'in_progress', 'done', 'cancelled']
-        if new_status in valid:
-            return True
-        else:
-            return False
+    @staticmethod
+    def validate_status(status):
+        return status in VALID_STATUSES
 
-    def validate_priority(self, p):
-        if p >= 1 and p <= 5:
-            return True
-        return False
+    @staticmethod
+    def validate_priority(priority):
+        return 1 <= priority <= 5
 
+    @property
+    def due_date_aware(self):
+        if not self.due_date:
+            return None
+        if self.due_date.tzinfo is None:
+            return self.due_date.replace(tzinfo=timezone.utc)
+        return self.due_date
+
+    @property
     def is_overdue(self):
-        if self.due_date:
-            if self.due_date < datetime.utcnow():
-                if self.status != 'done' and self.status != 'cancelled':
-                    return True
-                else:
-                    return False
-            else:
-                return False
-        else:
+        due_date = self.due_date_aware
+        if not due_date:
             return False
+        return due_date < datetime.now(timezone.utc) and self.status not in ('done', 'cancelled')
+
+    @staticmethod
+    def compute_stats():
+        total = Task.query.count()
+        pending = Task.query.filter_by(status='pending').count()
+        in_progress = Task.query.filter_by(status='in_progress').count()
+        done = Task.query.filter_by(status='done').count()
+        cancelled = Task.query.filter_by(status='cancelled').count()
+        overdue = sum(1 for t in Task.query.all() if t.is_overdue)
+
+        return {
+            'total': total,
+            'pending': pending,
+            'in_progress': in_progress,
+            'done': done,
+            'cancelled': cancelled,
+            'overdue': overdue,
+            'completion_rate': round((done / total) * 100, 2) if total > 0 else 0,
+        }
