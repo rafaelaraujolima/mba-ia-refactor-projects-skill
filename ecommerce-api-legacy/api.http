@@ -1,5 +1,14 @@
 @baseUrl = http://localhost:3000
 
+### Login (admin seed)
+POST {{baseUrl}}/api/login
+Content-Type: application/json
+
+{
+  "email": "leonan@fullcycle.com.br",
+  "password": "123"
+}
+
 ### Checkout - sucesso
 POST {{baseUrl}}/api/checkout
 Content-Type: application/json
@@ -24,8 +33,10 @@ Content-Type: application/json
   "card": "5111222233334444"
 }
 
-### Relatório financeiro administrativo
+### Relatório financeiro administrativo (requer token de admin — cole abaixo o token retornado pelo login acima)
 GET {{baseUrl}}/api/admin/financial-report
+Authorization: Bearer COLE_O_TOKEN_AQUI
 
-### Deletar usuário
+### Deletar usuário (requer token do próprio usuário ou de um admin)
 DELETE {{baseUrl}}/api/users/1
+Authorization: Bearer COLE_O_TOKEN_AQUI

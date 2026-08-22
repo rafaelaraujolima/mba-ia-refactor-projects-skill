@@ -446,3 +446,77 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 - **Projetos diferentes exigem adaptação** — a Fase 3 de um projeto já parcialmente organizado não vai ter as mesmas transformações de um monolito. Sua skill deve se adaptar ao contexto.
 - **Pedir confirmação na Fase 2 é obrigatório** — o humano deve revisar o relatório antes de qualquer modificação.
 - **Consulte as referências do curso** — revise a documentação oficial da ferramenta escolhida e os materiais das aulas para relembrar a estrutura e anatomia de uma skill.
+
+---
+
+## Entrega
+
+### Projeto [code-smells-project](/code-smells-project/)
+
+### 1. Análise manual
+
+Linguagem: Python
+
+Arquitetura: monolítica
+
+Problemas **CRITICAL**:
+
+1. Um único arquivo models.py com toda lógica de acesso ao banco de dados, mesmo com contextos diferentes. Isso causa acoplamento e dependência que, caso alguma alteração em um dos contextos quebrar, pode quebrar todos os outros.
+2. SQL Injection via concatenação de string no arquivo models.py. Isso pode fazer com que um usuário mal intencionado execute consultas SQL que não deveria.
+
+Problemas **MEDIUM**:
+
+1. Queries consecutivas ao banco, aninhadas, gerando N+1 chamadas ao banco. O correto seria fazer chamadas em lote.
+2. Modo debug ativo, expondo dados sensíveis de configuração.
+
+Problemas **LOW**:
+
+1. Mecanismo de log muito simples, imprimindo apenas no console de forma desestruturada. Fica difícil debugar ou avaliar possíveis problemas.
+2. Magic numbers nos relatórios de vendas, dificultando o entendimento na geração dos relatórios.
+
+### Projeto [ecommerce-api-legacy](/ecommerce-api-legacy/)
+
+### 1. Análise manual
+
+Linguagem: JavaScript
+
+Arquitetura: multi-arquivos sem camadas
+
+Problemas **CRITICAL**:
+
+1. Credenciais e segredos hardcoded.
+2. God Class AppManager contém toda a lógica de banco de dados.
+
+Problemas **MEDIUM**:
+
+1. Relatórios Financeiros com queries aninhadas, gerando N+1 queries.
+2. Tratamento de erro inconsistente entre rotas, não existindo um middleware capaz de tratar isso.
+
+Problemas **LOW**:
+
+1. Nomenclatura e números mágicos no código.
+2. Logging orientado via console.log, sem nenhuma estrutura de logs.
+
+### Projeto [task-manager-api](/task-manager-api/)
+
+### 1. Análise manual
+
+Linguagem: Python
+
+Arquitetura: dividida em camadas
+
+Problemas **CRITICAL**:
+
+1. Credenciais hardcoded.
+2. Autenticação/Autorização ausente nas rotas que precisam disso.
+
+Problemas **MEDIUM**:
+
+1. Queries aninhadas, gerando N+1 queries.
+2. Código duplicado que pode ser reaproveitado através de helpers.
+
+Problemas **LOW**:
+
+1. Mecanismo de log muito simples, imprimindo apenas no console de forma desestruturada.
+2. Código morto nunca utilizado.
+
