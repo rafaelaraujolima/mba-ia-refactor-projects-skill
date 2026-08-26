@@ -64,13 +64,27 @@ def create_user(data):
     return user.to_dict()
 
 
-def update_user(user_id, data):
+ADMIN_ONLY_FIELDS = {'role', 'active'}
+
+
+def update_user(user_id, data, acting_user):
     user = User.query.get(user_id)
     if not user:
         raise AppError('Usuário não encontrado', 404)
 
     if not data:
         raise AppError('Dados inválidos', 400)
+
+    is_owner = acting_user.id == user_id
+    is_admin = acting_user.role == 'admin'
+    if not (is_owner or is_admin):
+        raise AppError('Acesso negado', 403)
+
+    blocked = ADMIN_ONLY_FIELDS & data.keys()
+    if blocked and not is_admin:
+        raise AppError(
+            f'Apenas administradores podem alterar: {", ".join(sorted(blocked))}', 403
+        )
 
     if 'name' in data:
         user.name = data['name']

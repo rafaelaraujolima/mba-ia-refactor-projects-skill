@@ -29,10 +29,10 @@ já que ela só precisa do primeiro.
 | Arquivo | Ler na | Conteúdo |
 |---|---|---|
 | `references/project-analysis.md` | Fase 1 | Heurísticas para detectar linguagem, framework, banco de dados, dependências, domínio e arquitetura atual a partir da árvore de arquivos e manifestos |
-| `references/anti-patterns-catalog.md` | Fase 2 | 15 anti-patterns com severidade, sinais de detecção e orientação de evidência arquivo/linha, incluindo detecção de APIs deprecated |
+| `references/anti-patterns-catalog.md` | Fase 2 | 16 anti-patterns com severidade, sinais de detecção e orientação de evidência arquivo/linha, incluindo detecção de APIs deprecated e de autorização insuficiente/mass assignment |
 | `references/audit-report-template.md` | Fase 2 | A estrutura exata que o relatório de auditoria deve seguir |
 | `references/mvc-guidelines.md` | Fase 3 | O que significa "MVC correto" para a stack alvo, e como escalar a refatoração conforme a maturidade inicial do projeto |
-| `references/refactoring-playbook.md` | Fase 3 | 13 padrões de transformação antes/depois, um para cada família de anti-pattern |
+| `references/refactoring-playbook.md` | Fase 3 | 14 padrões de transformação antes/depois, um para cada família de anti-pattern |
 
 ---
 
@@ -71,6 +71,12 @@ bloco distinto. Mas não pare e espere aqui; siga direto para a Fase 2, a menos 
 seja ambíguo demais para analisar (ex.: nenhum ponto de entrada reconhecível), caso em que você
 deve pedir orientação ao usuário antes de continuar.
 
+5. Além de imprimir, **crie** `reports/audit-report.md` dentro do projeto auditado (crie o
+   diretório `reports/` se não existir) com este mesmo bloco como conteúdo inicial — este é o
+   primeiro dos três momentos em que o arquivo é escrito (Fase 1 abre, Fase 2 continua, Fase 3
+   completa; ver `references/audit-report-template.md`). Nunca pule esta etapa: o arquivo salvo
+   precisa sempre registrar o que foi analisado, não só o que foi encontrado depois.
+
 ---
 
 ## Fase 2 — Auditoria de Arquitetura
@@ -94,9 +100,10 @@ e então parar.
    uma linha continua sendo CRITICAL.
 5. Escreva o relatório completo seguindo `references/audit-report-template.md` à risca, com os
    findings ordenados CRITICAL → HIGH → MEDIUM → LOW (empates desempatados por caminho de
-   arquivo). Salve em `reports/audit-report.md` dentro do projeto auditado (crie o diretório
-   `reports/` se não existir) — uma revisão posterior pode querer mover ou renomear esse arquivo,
-   mas o trabalho da skill termina em escrevê-lo em um local previsível e autocontido.
+   arquivo). **Acrescente** esse relatório ao mesmo `reports/audit-report.md` já criado na Fase 1
+   (não crie um segundo arquivo, não sobrescreva o bloco da Fase 1) — uma revisão posterior pode
+   querer mover ou renomear esse arquivo, mas o trabalho da skill termina em escrevê-lo em um
+   local previsível e autocontido.
 6. Imprima o relatório na conversa. O arquivo salvo termina em `Total: <N> findings` — **não**
    inclua a pergunta de confirmação do passo 7 dentro do arquivo (veja "O que vai para o arquivo
    vs. o que vai só para a conversa" em `references/audit-report-template.md`): ela é um prompt

@@ -204,6 +204,13 @@ Item #11 do catálogo foi verificado explicitamente. O uso do Flask 3.1.1 neste 
 de nenhuma API deprecated (sem `before_first_request`, sem imports removidos do Werkzeug, sem
 chamadas deprecated de `datetime`) — nenhum finding de API deprecated se aplica a este projeto.
 
+## Authorization / Mass Assignment Check (catálogo #16)
+Verificado explicitamente após um finding CRITICAL desse tipo ter sido encontrado no projeto
+task-manager-api. Este projeto (versão original, pré-refatoração) não tem nenhum endpoint de
+atualização de usuário (`PUT /usuarios/<id>` não existe) — o único campo sensível relevante
+(`tipo`/role) só é definido na criação (`POST /usuarios`, sempre como `"cliente"` por padrão) e
+nunca é editável via API. Nenhum finding deste tipo se aplica a este projeto.
+
 ```text
 ================================
 Total: 15 findings

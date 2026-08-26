@@ -538,22 +538,25 @@ alterações para os outros dois projetos (`ecommerce-api-legacy/.claude/skills/
   `refactoring-playbook.md`. Nenhuma fase precisa do conhecimento de outra fase para rodar.
 - **Cinco arquivos de referência, um por área de conhecimento exigida**: `project-analysis.md`
   (heurísticas de detecção de linguagem/framework/banco/domínio/arquitetura),
-  `anti-patterns-catalog.md` (15 anti-patterns), `audit-report-template.md` (formato do
+  `anti-patterns-catalog.md` (16 anti-patterns), `audit-report-template.md` (formato do
   relatório, incluindo como o arquivo é construído em três momentos — Fase 1 abre, Fase 2
   continua, Fase 3 completa), `mvc-guidelines.md` (o que é Model/View-Route/Controller de verdade,
   e como escalar a refatoração conforme a maturidade inicial do projeto) e
-  `refactoring-playbook.md` (13 padrões de transformação com código antes/depois).
-- **Catálogo de anti-patterns** (15 itens, acima do mínimo de 8, com severidade distribuída 4
+  `refactoring-playbook.md` (14 padrões de transformação com código antes/depois).
+- **Catálogo de anti-patterns** (16 itens, acima do mínimo de 8, com severidade distribuída 5
   CRITICAL / 4 HIGH / 4 MEDIUM / 3 LOW): incluí exatamente os padrões que apareceram nos três
   projetos durante a análise manual — segredos hardcoded, SQL injection, God Class, hash de senha
-  fraco (CRITICAL); lógica de negócio presa em controllers/routes, autenticação ausente/falsa,
-  acoplamento forte sem DI, callback hell (HIGH); N+1, lógica duplicada, **APIs deprecated**
-  (obrigatório pelo enunciado — cobre `datetime.utcnow()`, `before_first_request`, driver
-  `sqlite3` em estilo callback vs. o pacote `sqlite` baseado em Promise, `body-parser` vs.
-  `express.json()` embutido), validação/middleware inadequado (MEDIUM); nomenclatura/números
-  mágicos, logging via print/console.log, código morto (LOW). Cada item tem "sinais de detecção"
-  concretos (ex.: "query dentro de um loop `for`"), não descrições vagas.
-- **Playbook de refatoração** (13 padrões, acima do mínimo de 8): um padrão por família de
+  fraco, autorização insuficiente/mass assignment de campos sensíveis (CRITICAL); lógica de
+  negócio presa em controllers/routes, autenticação ausente/falsa, acoplamento forte sem DI,
+  callback hell (HIGH); N+1, lógica duplicada, **APIs deprecated** (obrigatório pelo enunciado —
+  cobre `datetime.utcnow()`, `before_first_request`, driver `sqlite3` em estilo callback vs. o
+  pacote `sqlite` baseado em Promise, `body-parser` vs. `express.json()` embutido),
+  validação/middleware inadequado (MEDIUM); nomenclatura/números mágicos, logging via
+  print/console.log, código morto (LOW). Cada item tem "sinais de detecção" concretos (ex.: "query
+  dentro de um loop `for`"), não descrições vagas. O item de autorização/mass assignment foi
+  adicionado numa segunda iteração, depois de um bug real ter sido encontrado em
+  `task-manager-api` (ver "Desafios encontrados" abaixo).
+- **Playbook de refatoração** (14 padrões, acima do mínimo de 8): um padrão por família de
   anti-pattern do catálogo, cada um com exemplo antes/depois em Python **e** em Node quando fazia
   sentido (ex.: parametrização de query, conversão de callback para async/await), para que a Fase
   3 sempre tenha um exemplo de código na linguagem certa.
@@ -606,6 +609,23 @@ alterações para os outros dois projetos (`ecommerce-api-legacy/.claude/skills/
   ausente. Nenhum dos dois aparecia até de fato subir o servidor e testar os endpoints com
   `curl` — reforçou por que a Fase 3 exige validação real (boot + endpoints), não só "o código
   parece certo".
+- **Um guard de auth "genérico" mascarando uma falha de autorização real**: em revisão manual
+  posterior à validação, encontrei que `PUT /users/<id>` no `task-manager-api` estava protegido
+  só por `@require_auth()` (qualquer usuário logado), sem checar se quem chamava era o dono do
+  recurso, e o controller aplicava `role`/`active` do corpo da requisição sem nenhuma restrição —
+  qualquer usuário comum conseguia se auto-promover a admin. O catálogo original (`#6 — Missing or
+  Fake Authentication`) cobria "não tem auth nenhuma" e "token falso", mas não esse caso
+  intermediário: auth real, mas sem checagem de posse/papel por campo. Corrigi o bug no código,
+  adicionei o catálogo `#16` e o playbook `#14` especificamente para essa forma de problema, e
+  reexecutei a verificação nos três projetos — os outros dois não tinham essa exposição (nenhum
+  tem endpoint de atualização de usuário com esse formato), mas agora o catálogo cobre o caso, se
+  ele aparecer em uma futura auditoria.
+
+  A verificação, o fix e a revalidação estão documentados no `reports/audit-report.md` do
+  `task-manager-api`: um finding CRITICAL novo (com nota explícita de proveniência — encontrado
+  fora do fluxo normal da Fase 2), o playbook `#14` referenciado na recomendação, e o resultado
+  revalidado (usuário comum bloqueado com `403` ao tentar se promover ou editar outra conta; admin
+  continua conseguindo alterar `role` normalmente).
 
 ---
 
@@ -617,11 +637,11 @@ alterações para os outros dois projetos (`ecommerce-api-legacy/.claude/skills/
 |---|---|---|---|---|---|---|---|---|
 | [code-smells-project](/code-smells-project/reports/audit-report.md) | Python/Flask 3.1.1 | 4 (~784 LOC) | 15 | 5 | 3 | 4 | 3 | 14/15 (1 LOW parcial — nomenclatura pt/en) |
 | [ecommerce-api-legacy](/ecommerce-api-legacy/reports/audit-report.md) | Node/Express ^4.18.2 | 3 (~180 LOC) | 17 | 4 | 7 | 3 | 3 | 17/17 |
-| [task-manager-api](/task-manager-api/reports/audit-report.md) | Python/Flask 3.0.0 | 15 (~1160 LOC) | 14 | 3 | 2 | 5 | 4 | 14/14 |
+| [task-manager-api](/task-manager-api/reports/audit-report.md) | Python/Flask 3.0.0 | 15 (~1160 LOC) | 15 | 4 | 2 | 5 | 4 | 15/15 |
 
 Os três projetos batem o critério de aceite (≥5 findings, com pelo menos 1 CRITICAL/HIGH, nos
-3/3 projetos) com folga — a auditoria mais "enxuta" (task-manager-api) ainda encontrou 14
-findings, quase 3x o mínimo.
+3/3 projetos) com folga — a auditoria mais "enxuta" (task-manager-api) ainda encontrou 15
+findings, 3x o mínimo.
 
 ### Comparação antes/depois da estrutura
 
@@ -738,7 +758,7 @@ projetos 1 e 2.
 - [x] Relatório segue o template definido nos arquivos de referência
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
-- [x] Mínimo de 5 findings identificados (14)
+- [x] Mínimo de 5 findings identificados (15, incluindo 1 CRITICAL de autorização encontrado e corrigido em revisão posterior)
 - [x] Detecção de APIs deprecated incluída (datetime.utcnow())
 - [x] Skill pausa e pede confirmação antes da Fase 3
 
@@ -809,6 +829,14 @@ $ curl -X POST http://localhost:5000/login -d '{"email":"joao@email.com","passwo
 {"message":"Login realizado com sucesso","token":"eyJhbGciOiJIUzI1NiIs...","user":{...,"role":"admin"}}
 $ curl -X POST http://localhost:5000/tasks -H "Authorization: Bearer <token>" -d '{"title":"Testar refatoracao"}'
 {"id":11,"title":"Testar refatoracao","status":"pending","priority":3,...}
+
+# Fix de autorização (catálogo #16 / playbook #14), validado após ser reportado:
+$ curl -X PUT http://localhost:5000/users/2 -H "Authorization: Bearer <token-da-maria>" -d '{"role":"admin"}'
+{"error":"Apenas administradores podem alterar: role"}   # HTTP 403
+$ curl -X PUT http://localhost:5000/users/3 -H "Authorization: Bearer <token-da-maria>" -d '{"name":"Hackeado"}'
+{"error":"Acesso negado"}                                 # HTTP 403 (editando outro usuário)
+$ curl -X PUT http://localhost:5000/users/2 -H "Authorization: Bearer <token-da-maria>" -d '{"name":"Maria Silva"}'
+{"id":2,"name":"Maria Silva","role":"user",...}           # HTTP 200 (editando a si mesma, campo comum)
 ```
 
 ### Observações sobre como a skill se comportou em stacks diferentes
