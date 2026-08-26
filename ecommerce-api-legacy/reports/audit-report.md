@@ -305,6 +305,14 @@ Applied: concluído nesta sessão
 ## Findings parcialmente resolvidos ou adiados
 Nenhum — todos os 17 findings da Fase 2 foram resolvidos.
 
+## Authorization / Mass Assignment Check (catálogo #16)
+Verificado explicitamente após um finding CRITICAL desse tipo ter sido encontrado no projeto
+task-manager-api. O único endpoint de mutação de usuário deste projeto é
+`DELETE /api/users/:id`, e `userController.deleteUser` já checa `isSelf || requestingUser.isAdmin`
+antes de executar (ver finding "Endpoint Destrutivo Sem Autenticação" acima). Não existe endpoint
+de atualização de campos de usuário (`PUT`/`PATCH /api/users/:id`) neste projeto — logo, não há
+superfície de mass assignment de campos administrativos. Nenhum finding deste tipo se aplica.
+
 ```text
 ================================
 17/17 findings resolved

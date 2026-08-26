@@ -29,10 +29,10 @@ já que ela só precisa do primeiro.
 | Arquivo | Ler na | Conteúdo |
 |---|---|---|
 | `references/project-analysis.md` | Fase 1 | Heurísticas para detectar linguagem, framework, banco de dados, dependências, domínio e arquitetura atual a partir da árvore de arquivos e manifestos |
-| `references/anti-patterns-catalog.md` | Fase 2 | 15 anti-patterns com severidade, sinais de detecção e orientação de evidência arquivo/linha, incluindo detecção de APIs deprecated |
+| `references/anti-patterns-catalog.md` | Fase 2 | 16 anti-patterns com severidade, sinais de detecção e orientação de evidência arquivo/linha, incluindo detecção de APIs deprecated e de autorização insuficiente/mass assignment |
 | `references/audit-report-template.md` | Fase 2 | A estrutura exata que o relatório de auditoria deve seguir |
 | `references/mvc-guidelines.md` | Fase 3 | O que significa "MVC correto" para a stack alvo, e como escalar a refatoração conforme a maturidade inicial do projeto |
-| `references/refactoring-playbook.md` | Fase 3 | 13 padrões de transformação antes/depois, um para cada família de anti-pattern |
+| `references/refactoring-playbook.md` | Fase 3 | 14 padrões de transformação antes/depois, um para cada família de anti-pattern |
 
 ---
 

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from controllers import auth_controller, user_controller
 from controllers.auth_controller import require_auth
@@ -25,7 +25,9 @@ def create_user():
 @user_bp.route('/users/<int:user_id>', methods=['PUT'])
 @require_auth()
 def update_user(user_id):
-    user = user_controller.update_user(user_id, request.get_json(silent=True))
+    user = user_controller.update_user(
+        user_id, request.get_json(silent=True), acting_user=g.current_user
+    )
     return jsonify(user), 200
 
 

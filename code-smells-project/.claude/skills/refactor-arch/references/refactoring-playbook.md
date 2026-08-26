@@ -484,3 +484,99 @@ logger.error("Erro ao criar produto", exc_info=e)
 `logger` respeita níveis de log e pode ser silenciado/redirecionado em produção, ao contrário de
 `print`, o que também corrige o code smell de flag de debug ligada quando combinado com o padrão
 #1 (o config agora controla o nível de log em vez de `debug=True` ser o único interruptor).
+
+---
+
+## 14. Checar dono ou papel antes de mutar campos sensíveis
+
+Corrige o #16 do catálogo (Autorização Insuficiente / Mass Assignment de Campos Sensíveis). Este
+padrão vale para **toda** rota que edita um recurso identificado por ID — não só as de exclusão,
+que já eram cobertas pelo padrão #6. Um guard de "está autenticado" não é o mesmo que um guard de
+"pode editar este recurso específico, com estes campos específicos".
+
+**Antes** (bug real encontrado numa validação de Fase 3 — o guard existe, mas não impede o
+usuário A de editar o usuário B, nem de setar `role`)
+```python
+@user_bp.route('/users/<int:user_id>', methods=['PUT'])
+@require_auth()
+def update_user(user_id):
+    user = user_controller.update_user(user_id, request.get_json(silent=True))
+    return jsonify(user), 200
+```
+```python
+def update_user(user_id, data):
+    user = User.query.get(user_id)
+    ...
+    if 'role' in data:
+        user.role = data['role']
+    if 'active' in data:
+        user.active = data['active']
+    ...
+```
+
+**Depois** — o usuário autenticado é passado explicitamente ao controller, que decide o que ele
+pode fazer com base em ser o dono do recurso, ser admin, e quais campos ele está tentando mudar:
+```python
+@user_bp.route('/users/<int:user_id>', methods=['PUT'])
+@require_auth()
+def update_user(user_id):
+    user = user_controller.update_user(
+        user_id, request.get_json(silent=True), acting_user=g.current_user
+    )
+    return jsonify(user), 200
+```
+```python
+ADMIN_ONLY_FIELDS = {'role', 'active'}
+
+def update_user(user_id, data, acting_user):
+    user = User.query.get(user_id)
+    if not user:
+        raise AppError('Usuário não encontrado', 404)
+
+    is_owner = acting_user.id == user_id
+    is_admin = acting_user.role == 'admin'
+    if not (is_owner or is_admin):
+        raise AppError('Acesso negado', 403)
+
+    blocked = ADMIN_ONLY_FIELDS & data.keys()
+    if blocked and not is_admin:
+        raise AppError(f'Apenas administradores podem alterar: {", ".join(blocked)}', 403)
+
+    if 'role' in data:
+        user.role = data['role']
+    if 'active' in data:
+        user.active = data['active']
+    ...
+```
+
+Equivalente em Node/Express — o mesmo raciocínio, só troca `acting_user`/`g.current_user` pelo que
+o middleware de auth já anexa à requisição (`req.user`):
+```javascript
+// Antes
+router.put('/users/:id', requireAuth(), userController.update);
+
+// Depois
+router.put('/users/:id', requireAuth(), (req, res, next) =>
+    userController.update(req, res, next, { actingUser: req.user })
+);
+```
+```javascript
+const ADMIN_ONLY_FIELDS = ['role', 'active'];
+
+async function update(userId, data, actingUser) {
+    const isOwner = actingUser.id === Number(userId);
+    const isAdmin = actingUser.role === 'admin';
+    if (!isOwner && !isAdmin) throw new AppError('Acesso negado', 403);
+
+    const blocked = ADMIN_ONLY_FIELDS.filter((f) => f in data);
+    if (blocked.length && !isAdmin) {
+        throw new AppError(`Apenas administradores podem alterar: ${blocked.join(', ')}`, 403);
+    }
+    // ...aplicar os campos permitidos
+}
+```
+
+Duas decisões deliberadas nesse padrão, não apenas uma: (1) **quem** pode agir sobre o recurso
+(dono ou admin) e (2) **quais campos** essa pessoa pode alterar mesmo sendo o dono — um usuário
+comum edita seu próprio nome/e-mail, mas não seu próprio `role`. Tratar as duas checagens como uma
+única ("está autenticado? ok, deixa passar") é exatamente o que causa o bug.

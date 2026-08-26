@@ -288,9 +288,47 @@ chamados de nenhum lugar alcançável — funcionalidade que parece existir mas 
 
 ---
 
+## 16. [CRITICAL] Autorização Insuficiente / Mass Assignment de Campos Sensíveis
+
+**Forma**: Diferente do catálogo #6 (nenhuma autenticação), aqui a autenticação existe e passa —
+mas o handler nunca verifica se o usuário autenticado é o **dono** do recurso que está mutando
+(ou um admin), e/ou aceita qualquer campo do corpo da requisição — incluindo campos que deveriam
+ser exclusivos de admin (`role`, `is_admin`, `active`, saldo, preço em um contexto de
+review/pedido) — e os aplica direto no model sem checar quem está pedindo a mudança. Um guard
+`@require_auth()` sem parâmetro de role, ou um decorator de "está logado" genérico, cria a falsa
+sensação de que a rota está protegida quando na verdade qualquer usuário autenticado pode agir
+sobre o recurso de **qualquer outro** usuário.
+
+**Sinais de detecção**:
+- Um handler `PUT`/`PATCH` em uma rota com um ID de recurso na URL (`/users/<id>`,
+  `/accounts/<id>`) protegido só por um guard de "autenticado" (sem checar role nem posse), onde o
+  `id` da URL nunca é comparado ao id do usuário autenticado (`g.current_user.id`,
+  `req.user.id`, etc.).
+- Atribuição direta de campos do corpo da requisição para o model
+  (`if 'role' in data: user.role = data['role']`, ou um loop genérico `for key, value in
+  data.items(): setattr(model, key, value)`) sem uma lista explícita de quais campos um usuário
+  comum pode alterar em si mesmo versus quais só um admin pode alterar em qualquer registro.
+- Testar manualmente: logar como um usuário comum e tentar `PUT` no próprio registro incluindo um
+  campo administrativo (`role`, `is_admin`, `verified`) — se funcionar, é este anti-pattern.
+
+**Exemplo real** (encontrado durante a validação da Fase 3, não na auditoria original — prova de
+por que vale reexecutar a Fase 2 depois de qualquer mudança em rotas de auth): uma rota
+`PUT /users/<id>` protegida com `@require_auth()` (qualquer usuário logado, sem checar role) cujo
+controller aplicava `if 'role' in data: user.role = data['role']` sem nunca comparar `user_id`
+com o id do usuário autenticado — qualquer usuário conseguia se promover a admin ou trocar a senha
+de outra conta.
+
+---
+
 ## Usando este catálogo com eficiência
 
-Leia cada arquivo-fonte pelo menos uma vez procurando especificamente por essas quinze formas. É
-normal um projeto legado pequeno disparar a maioria delas — esse é o ponto do exercício. Resista à
-tentação de parar assim que tiver "findings suficientes" para o mínimo exigido — uma auditoria
+Leia cada arquivo-fonte pelo menos uma vez procurando especificamente por essas dezesseis formas.
+É normal um projeto legado pequeno disparar a maioria delas — esse é o ponto do exercício. Resista
+à tentação de parar assim que tiver "findings suficientes" para o mínimo exigido — uma auditoria
 completa que acaba passando do mínimo é mais útil do que uma que para exatamente nele.
+
+Um cuidado especial vale para o item #16: ele é fácil de não aparecer numa primeira leitura porque
+o código *parece* protegido (tem um decorator de auth ali). Para toda rota que edita um recurso
+identificado por ID, pergunte explicitamente "o que impede o usuário X de editar o recurso do
+usuário Y, ou de setar um campo que só um admin deveria poder setar?" — se a resposta não estiver
+escrita em código, é um finding.

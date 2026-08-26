@@ -26,7 +26,7 @@ Files:   15 analyzed | ~1160 lines of code
 
 ## Summary
 
-[CRITICAL: 3](#critical) | [HIGH: 2](#high) | [MEDIUM: 5](#medium) | [LOW: 4](#low)
+[CRITICAL: 4](#critical) | [HIGH: 2](#high) | [MEDIUM: 5](#medium) | [LOW: 4](#low)
 
 ## Findings
 
@@ -52,6 +52,30 @@ File: services/notification_service.py:7-10
 Description: `email_host`, `email_port`, `email_user` e `email_password` (`'senha123'`) são atribuídos como literais no `__init__` da classe.
 Impact: Credenciais de uma conta de e-mail real ficam expostas no controle de versão; qualquer um com acesso ao repositório pode autenticar como `taskmanager@gmail.com` e enviar e-mail em nome da aplicação.
 Recommendation: Carregar host/porta/usuário/senha de variáveis de ambiente, seguindo o mesmo padrão de configuração aplicado ao `SECRET_KEY`.
+
+#### [CRITICAL] Autorização insuficiente em `PUT /users/<id>` (escalonamento de privilégio)
+
+File: routes/user_routes.py:25-29 (original, pré-fix), controllers/user_controller.py:67-100 (original, pré-fix)
+Description: A rota é protegida por `@require_auth()` — sem parâmetro de `role` — que só exige
+             *algum* usuário autenticado, e o controller nunca comparava o `user_id` da URL com o
+             id do usuário autenticado (`g.current_user`). Além disso, `update_user` aplicava
+             `if 'role' in data: user.role = data['role']` e `if 'active' in data: user.active =
+             data['active']` sem checar se quem chamou tinha permissão para alterar esses campos
+             especificamente.
+Impact: Qualquer usuário autenticado (role `user`) conseguia (1) editar o registro de **qualquer
+        outro** usuário pela URL, incluindo trocar a senha de outra pessoa, e (2) setar `role:
+        "admin"` em si mesmo via `PUT /users/<próprio_id>` — um escalonamento de privilégio
+        completo a partir de uma conta comum recém-criada.
+Recommendation: Aplicar o padrão "Checar dono ou papel antes de mutar campos sensíveis" (#14) do
+                refactoring-playbook.md — comparar o usuário autenticado com o dono do recurso, e
+                bloquear campos administrativos (`role`, `active`) para quem não for admin.
+
+**Nota de proveniência**: este finding não estava no relatório original da Fase 2 — foi descoberto
+por revisão manual de código *depois* da Fase 3 já ter rodado e sido validada, expondo uma lacuna
+no processo: a Fase 2 original verificou "existe um guard de auth na rota?" mas não "o guard
+distingue dono de não-dono, e campo comum de campo administrativo?". O catálogo de anti-patterns e
+o relatório foram atualizados retroativamente (catálogo #16, playbook #14) para que auditorias
+futuras capturem esse padrão na Fase 2, antes da Fase 3, e não apenas em revisão manual posterior.
 
 ### <a id="high"></a>HIGH
 
@@ -138,7 +162,7 @@ Recommendation: Renomear as variáveis de loop para o nome da entidade, e substi
 
 ```text
 ================================
-Total: 14 findings
+Total: 15 findings
 ================================
 ```
 
@@ -155,6 +179,7 @@ Applied: concluído nesta sessão
 - [CRITICAL] Credencial de sessão hardcoded (SECRET_KEY) — resolvido (`config/settings.py` lê de `os.environ` via `python-dotenv`; falha alto no boot se ausente)
 - [CRITICAL] Hashing de senha com MD5 — resolvido (`werkzeug.security.generate_password_hash`/`check_password_hash` em `models/user.py`; usuários existentes precisarão resetar a senha, pois hashes MD5 antigos não podem ser migrados automaticamente)
 - [CRITICAL] Credenciais SMTP hardcoded — resolvido (`services/notification_service.py` lê de `config/settings.py`; sem credenciais configuradas, o envio é pulado com log em vez de falhar)
+- [CRITICAL] Autorização insuficiente em `PUT /users/<id>` — resolvido (`controllers/user_controller.py` agora recebe `acting_user` e checa `is_owner or is_admin` antes de aplicar qualquer alteração; `role`/`active` só podem ser alterados por admin, mesmo pelo dono da conta — corrigido e validado após ser reportado em revisão manual, ver nota de proveniência no finding)
 - [HIGH] Autenticação/autorização ausente — resolvido (JWT real emitido em `/login` via `controllers/auth_controller.py`; decorator `require_auth()`/`require_auth(role="admin")` protege toda rota `POST`/`PUT`/`DELETE` de tasks, usuários e categorias, exceto o registro público `POST /users`)
 - [HIGH] Lógica de negócio/validação/serialização presa nos routes — resolvido (nova camada `controllers/` concentra toda a lógica; `routes/*.py` ficaram com 3 linhas por handler: parse → controller → resposta)
 - [MEDIUM] Queries N+1 — resolvido (`joinedload` em `task_controller.list_tasks` e `report_controller.summary_report`)
@@ -169,7 +194,11 @@ Applied: concluído nesta sessão
 
 ## Findings parcialmente resolvidos ou adiados
 
-Nenhum. Todos os 14 findings da Fase 2 foram resolvidos no código; o único item que não pode ser "corrigido" de fato é o dado histórico: usuários seedados antes desta refatoração tinham senha em MD5 e precisam resetar a senha (fora do escopo de uma refatoração de código — é uma ação operacional).
+Nenhum. Todos os 15 findings foram resolvidos no código (14 na Fase 2 original, mais 1 CRITICAL de
+autorização insuficiente encontrado em revisão manual posterior e corrigido nesta mesma sessão); o
+único item que não pode ser "corrigido" de fato é o dado histórico: usuários seedados antes desta
+refatoração tinham senha em MD5 e precisam resetar a senha (fora do escopo de uma refatoração de
+código — é uma ação operacional).
 
 ## Mudanças de contrato deliberadas
 
@@ -183,10 +212,11 @@ Nenhum. Todos os 14 findings da Fase 2 foram resolvidos no código; o único ite
 - Aplicação subiu sem erros (`python app.py`), sem exceções não tratadas no boot.
 - Endpoints exercitados manualmente via curl: `GET /health`, `GET /tasks`, `GET /tasks/stats`, `GET /tasks/search`, `POST /tasks` sem token (401) e com token (201), `POST /login` (credenciais corretas e incorretas), `DELETE /tasks/<id>` (200), `PUT /categories/<id>` sem corpo (400, antes seria 500) e com corpo (200), `DELETE /categories/<id>` com token não-admin (403), `GET /reports/summary`, `GET /reports/user/<id>`.
 - Dois bugs reais foram encontrados e corrigidos durante essa validação (não presentes no código antigo, introduzidos pela própria refatoração): `request.get_json()` sem `silent=True` lançava exceção não tratada (500) em vez de permitir o `400` esperado para corpo ausente/malformado; e a subtração de datetime naive/aware quebrava `GET /reports/summary` ao calcular `days_overdue`. Ambos corrigidos e re-testados com sucesso.
+- Em revisão manual posterior, foi identificado que `PUT /users/<id>` (protegido só por `@require_auth()`, sem checar dono nem papel) permitia que qualquer usuário autenticado editasse o registro de outro usuário e se auto-promovesse a admin. Corrigido em `routes/user_routes.py`/`controllers/user_controller.py` (checagem de `is_owner`/`is_admin` + bloqueio de campos `role`/`active` para não-admin) e revalidado ao vivo: usuário comum tentando setar `role: admin` em si mesmo → `403`; tentando editar outro usuário → `403`; editando o próprio nome → `200`; admin alterando o `role` de outro usuário → `200`.
 - Servidor de teste encerrado ao final da validação.
 
 ```text
 ================================
-14/14 findings resolved
+15/15 findings resolved
 ================================
 ```
